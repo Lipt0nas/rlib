@@ -7,13 +7,18 @@ extern crate sdl2;
 
 extern crate gl;
 
-type RenderFunc = fn(f32);
+pub mod gfx;
+
+pub trait RLibApp {
+    fn new() -> Self;
+    fn init(&mut self) -> ();
+    fn render(&mut self) -> ();
+}
 
 pub struct RlibConfig {
     pub window_title: String,
     pub window_width: u32,
     pub window_height: u32,
-    pub render_func: RenderFunc,
 }
 
 impl Default for RlibConfig {
@@ -22,12 +27,11 @@ impl Default for RlibConfig {
             window_title: "Title".to_string(),
             window_width: 800,
             window_height: 600,
-            render_func: |_| {},
         }
     }
 }
 
-pub fn init_sdl(config: RlibConfig) {
+pub fn init<App: RLibApp>(config: RlibConfig) {
     TermLogger::init(
         LevelFilter::max(),
         Config::default(),
@@ -37,7 +41,6 @@ pub fn init_sdl(config: RlibConfig) {
     .unwrap();
 
     info!("Initializing rlib");
-
     info!("Initializing SDL");
     let sdl = sdl2::init().unwrap();
     let sdl_video = sdl.video().unwrap();
@@ -60,6 +63,9 @@ pub fn init_sdl(config: RlibConfig) {
     let _gl_context = window.gl_create_context().unwrap();
     let _gl = gl::load_with(|s| sdl_video.gl_get_proc_address(s) as *const std::os::raw::c_void);
 
+    let mut app = App::new();
+    app.init();
+
     let mut event_pump = sdl.event_pump().unwrap();
     'main_loop: loop {
         for event in event_pump.poll_iter() {
@@ -77,7 +83,8 @@ pub fn init_sdl(config: RlibConfig) {
                 i32::try_from(config.window_height).unwrap(),
             );
         }
-        (config.render_func)(1.0);
+
+        app.render();
 
         window.gl_swap_window();
     }
