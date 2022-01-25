@@ -4,7 +4,9 @@ struct Application {
     vertex_buffer: gfx::buffer::Buffer,
     shader_program: gfx::shader::ShaderProgram,
     texture: gfx::texture::Texture,
+    batch: gfx::sprite_batch::SpriteBatch<1000>,
     vao: u32,
+    test_val: f32,
 }
 
 impl rlib::RLibApp for Application {
@@ -14,7 +16,7 @@ impl rlib::RLibApp for Application {
             "
             #version 430 core
             
-            layout (location = 0) in vec3 in_position;
+            layout (location = 0) in vec2 in_position;
             layout (location = 1) in vec2 in_uv;
 
             layout (location = 0) out vec3 out_color;
@@ -27,7 +29,7 @@ impl rlib::RLibApp for Application {
             );
 
             void main() {
-                gl_Position = vec4(in_position, 1.0);
+                gl_Position = vec4(in_position, 0.0, 1.0);
 
                 out_color = color_map[gl_VertexID];
                 out_uv = in_uv;
@@ -64,6 +66,8 @@ impl rlib::RLibApp for Application {
             .unwrap(),
             texture: gfx::texture::Texture::from_file("data/amogus.png").unwrap(),
             vao: 0,
+            batch: gfx::sprite_batch::SpriteBatch::new().unwrap(),
+            test_val: 0.0,
         }
     }
 
@@ -108,6 +112,8 @@ impl rlib::RLibApp for Application {
             self.vertex_buffer.unbind();
             gl::BindVertexArray(0);
         }
+
+        self.batch.initialize();
     }
 
     fn render(&mut self) {
@@ -118,9 +124,17 @@ impl rlib::RLibApp for Application {
             self.shader_program.bind();
             self.texture.bind(0);
 
-            gl::BindVertexArray(self.vao);
+            let x = f32::sin(self.test_val);
+            self.test_val += 0.0004;
 
-            gl::DrawArrays(gl::TRIANGLES, 0, 3);
+            self.batch.begin_batch();
+            self.batch.draw(-0.25 - x, 0.0, 0.5, 0.5);
+            //self.batch.draw(x, 0.5, 0.1, 0.1);
+            self.batch.end_batch();
+
+            //gl::BindVertexArray(self.vao);
+
+            //gl::DrawArrays(gl::TRIANGLES, 0, 3);
         }
     }
 }

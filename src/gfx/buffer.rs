@@ -27,6 +27,27 @@ impl Buffer {
         }
     }
 
+    pub fn new_with_capacity(buffer_type: u32, usage: u32, capacity: u32) -> Option<Buffer> {
+        let mut handle: u32 = 0;
+
+        unsafe {
+            gl::GenBuffers(1, &mut handle);
+            gl::BindBuffer(buffer_type, handle);
+            gl::BufferData(buffer_type, capacity as isize, std::ptr::null(), usage);
+        }
+
+        if handle == 0 {
+            None
+        } else {
+            Some(Buffer {
+                handle,
+                size: capacity as isize,
+                buffer_type,
+                usage,
+            })
+        }
+    }
+
     pub fn bind(&self) {
         unsafe {
             gl::BindBuffer(self.buffer_type, self.handle);
@@ -63,6 +84,22 @@ impl Buffer {
         self.bind();
         unsafe {
             gl::BufferSubData(self.buffer_type, offset, byte_count, ptr);
+        }
+    }
+
+    pub fn copy_data_part(&self, data: &[f32], src_size: isize, dst_offset: isize) {
+        let mut byte_count = (src_size as usize * std::mem::size_of::<f32>()) as isize;
+        let ptr = data.as_ptr() as *const std::os::raw::c_void;
+
+        if (dst_offset + byte_count) > self.size {
+            byte_count = self.size - dst_offset;
+        }
+
+        info!("{}", byte_count);
+
+        self.bind();
+        unsafe {
+            gl::BufferSubData(self.buffer_type, dst_offset, byte_count, ptr);
         }
     }
 
