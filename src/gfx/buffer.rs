@@ -19,10 +19,10 @@ impl Buffer {
             None
         } else {
             Some(Buffer {
-                handle: handle,
+                handle,
                 size: 0,
-                buffer_type: buffer_type,
-                usage: usage,
+                buffer_type,
+                usage,
             })
         }
     }
