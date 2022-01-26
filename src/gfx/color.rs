@@ -1,5 +1,6 @@
 extern crate log;
 
+#[derive(Clone, Copy)]
 pub struct Color {
     pub r: f32,
     pub g: f32,
@@ -16,16 +17,15 @@ impl Color {
         Color { r, g, b, a: 1.0 }
     }
 
-    pub fn from_float(bits: f32) -> Color {
-        let r = ((bits as u32) >> 24) as f32;
-        let g = ((bits as u32) >> 16) as f32;
+    pub fn from_float_bits(bits: f32) -> Color {
+        let bits: u32 = bits.to_bits();
 
-        Color {
-            r: 0.0,
-            g: 0.0,
-            b: 0.0,
-            a: 0.0,
-        }
+        let r = ((bits & 0xFF000000) >> 24) as f32;
+        let g = ((bits & 0x00FF0000) >> 16) as f32;
+        let b = ((bits & 0x0000FF00) >> 8) as f32;
+        let a = (bits & 0x000000FF) as f32;
+
+        Color { r, g, b, a }
     }
 
     pub fn to_rgba8(self) -> f32 {
@@ -34,6 +34,12 @@ impl Color {
         let b = (self.b * 255.0) as u32;
         let a = (self.a * 255.0) as u32;
 
-        ((r << 24) | (g << 16) | (b << 8) | a) as f32
+        let mut bits: u32 = 0;
+        bits |= r << 24;
+        bits |= g << 16;
+        bits |= b << 8;
+        bits |= a;
+
+        f32::from_bits(bits)
     }
 }

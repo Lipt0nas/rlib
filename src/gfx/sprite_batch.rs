@@ -1,6 +1,31 @@
 use super::buffer::Buffer;
 use super::color::Color;
+use super::texture::Texture;
 extern crate log;
+
+#[derive(Copy, Clone)]
+pub struct Sprite<'a> {
+    pub texture: Option<&'a Texture>,
+
+    pub x: f32,
+    pub y: f32,
+    pub width: f32,
+    pub height: f32,
+    pub color: Color,
+}
+
+impl Sprite<'_> {
+    pub fn new(texture: Option<&Texture>) -> Sprite {
+        Sprite {
+            texture,
+            x: 0.0,
+            y: 0.0,
+            width: 10.0,
+            height: 10.0,
+            color: Color::from_rgba(1.0, 1.0, 1.0, 1.0),
+        }
+    }
+}
 
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -119,11 +144,13 @@ impl<const COUNT: usize> SpriteBatch<COUNT> {
         self.vertex_offset = 0;
     }
 
-    pub fn draw(&mut self, x: f32, y: f32, width: f32, height: f32) {
-        let color = Color::from_rgba(0.0, 0.0, 0.0, 1.0);
-        let c = color.to_rgba8() as f32;
+    pub fn draw(&mut self, x: f32, y: f32, width: f32, height: f32, color: Option<Color>) {
+        let color = match color {
+            Some(c) => c,
+            None => Color::from_rgba(1.0, 1.0, 1.0, 1.0),
+        };
 
-        info!("{}", c);
+        let c = color.to_rgba8();
 
         {
             let vtx: &mut SpriteVertex = &mut self.vertices[self.vertex_offset as usize];

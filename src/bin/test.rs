@@ -1,3 +1,4 @@
+use gfx::*;
 use rlib::*;
 
 struct Application {
@@ -123,8 +124,14 @@ impl rlib::RLibApp for Application {
             self.test_val += 0.0004;
 
             self.batch.begin_batch();
-            self.batch.draw(-0.25 - x, 0.0, 0.5, 0.5);
-            self.batch.draw(x, 0.5, 0.1, 0.1);
+            self.batch.draw(
+                -0.25 - x,
+                0.0,
+                0.5,
+                0.5,
+                Some(color::Color::from_rgba(1.0, 0.0, 0.0, 1.0)),
+            );
+            self.batch.draw(x, 0.5, 0.1, 0.1, None);
             self.batch.end_batch();
 
             //gl::BindVertexArray(self.vao);
