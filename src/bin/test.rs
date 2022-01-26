@@ -18,20 +18,15 @@ impl rlib::RLibApp for Application {
             
             layout (location = 0) in vec2 in_position;
             layout (location = 1) in vec2 in_uv;
+            layout (location = 2) in vec4 in_color;
 
-            layout (location = 0) out vec3 out_color;
+            layout (location = 0) out vec4 out_color;
             layout (location = 1) out vec2 out_uv;
-
-            const vec3[3] color_map = vec3[] (
-                vec3(1.0, 0.0, 0.0),
-                vec3(0.0, 1.0, 0.0),
-                vec3(0.0, 0.0, 1.0)
-            );
 
             void main() {
                 gl_Position = vec4(in_position, 0.0, 1.0);
 
-                out_color = color_map[gl_VertexID];
+                out_color = in_color;
                 out_uv = in_uv;
             }
         ",
@@ -43,7 +38,7 @@ impl rlib::RLibApp for Application {
             "
             #version 430 core
 
-            layout (location = 0) in vec3 in_color;
+            layout (location = 0) in vec4 in_color;
             layout (location = 1) in vec2 in_uv;
 
             layout (location = 0) out vec4 out_color;
@@ -51,7 +46,7 @@ impl rlib::RLibApp for Application {
             uniform sampler2D u_texture;
 
             void main() {
-                out_color = texture(u_texture, in_uv) * vec4(in_color, 1.0);
+                out_color = texture(u_texture, in_uv) * in_color;
             }
         ",
         )
@@ -129,7 +124,7 @@ impl rlib::RLibApp for Application {
 
             self.batch.begin_batch();
             self.batch.draw(-0.25 - x, 0.0, 0.5, 0.5);
-            //self.batch.draw(x, 0.5, 0.1, 0.1);
+            self.batch.draw(x, 0.5, 0.1, 0.1);
             self.batch.end_batch();
 
             //gl::BindVertexArray(self.vao);

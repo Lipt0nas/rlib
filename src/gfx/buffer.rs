@@ -73,6 +73,19 @@ impl Buffer {
         }
     }
 
+    pub fn set_data_u32(&mut self, data: &[u32]) {
+        let byte_count = (data.len() * std::mem::size_of::<u32>()) as isize;
+        let ptr = data.as_ptr() as *const std::os::raw::c_void;
+
+        self.size = byte_count;
+
+        self.bind();
+        unsafe {
+            gl::BufferData(self.buffer_type, byte_count, std::ptr::null(), self.usage);
+            gl::BufferData(self.buffer_type, byte_count, ptr, self.usage);
+        }
+    }
+
     pub fn copy_data(&self, data: &[f32], offset: isize) {
         let mut byte_count = (data.len() * std::mem::size_of::<f32>()) as isize;
         let ptr = data.as_ptr() as *const std::os::raw::c_void;
@@ -94,8 +107,6 @@ impl Buffer {
         if (dst_offset + byte_count) > self.size {
             byte_count = self.size - dst_offset;
         }
-
-        info!("{}", byte_count);
 
         self.bind();
         unsafe {

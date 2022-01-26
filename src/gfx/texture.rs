@@ -64,7 +64,7 @@ impl Texture {
 
     pub fn bind(&self, slot: u32) {
         unsafe {
-            gl::ActiveTexture(slot);
+            gl::ActiveTexture(gl::TEXTURE0 + slot);
             gl::BindTexture(self.texture_type, self.handle);
         }
     }
