@@ -1,11 +1,16 @@
 extern crate log;
 
-use std::ffi::CString;
+use std::{collections::HashMap, ffi::CString, rc::Rc};
 
-pub struct Shader {
+pub(crate) struct NativeShader {
     handle: u32,
     shader_type: u32,
     source: String,
+}
+
+#[derive(Clone)]
+pub struct Shader {
+    handle: Rc<NativeShader>,
 }
 
 impl Shader {
@@ -59,39 +64,36 @@ impl Shader {
             }
 
             Some(Shader {
-                handle: handle,
-                shader_type: shader_type,
-                source: source.to_owned(),
+                handle: Rc::new(NativeShader {
+                    handle,
+                    shader_type,
+                    source: source.to_owned(),
+                }),
             })
         }
     }
 
     pub fn get_handle(&self) -> u32 {
-        self.handle
+        self.handle.handle
     }
 
     pub fn get_type(&self) -> u32 {
-        self.shader_type
+        self.handle.shader_type
     }
 
     pub fn get_source(&self) -> &str {
-        &self.source
+        &self.handle.source
     }
 }
 
-impl Drop for Shader {
-    fn drop(&mut self) {
-        info!("Dropping shader");
-        if self.handle != 0 {
-            unsafe {
-                gl::DeleteShader(self.handle);
-            }
-        }
-    }
-}
-
-pub struct ShaderProgram {
+pub(crate) struct NativeShaderProgram {
     handle: u32,
+    uniforms: HashMap<String, u32>,
+}
+
+#[derive(Clone)]
+pub struct ShaderProgram {
+    handle: Rc<NativeShaderProgram>,
 }
 
 impl ShaderProgram {
@@ -148,29 +150,64 @@ impl ShaderProgram {
             }
         }
 
-        Some(ShaderProgram { handle: handle })
+        let mut uniforms: HashMap<String, u32> = HashMap::new();
+        let mut uniform_count: i32 = 0;
+        unsafe {
+            gl::GetProgramiv(handle, gl::ACTIVE_UNIFORMS, &mut uniform_count);
+
+            let mut string_buffer: Vec<u8> = Vec::with_capacity(256);
+            string_buffer.extend([b' '].iter().cycle().take(255));
+
+            let var_name: CString = CString::from_vec_unchecked(string_buffer);
+
+            for i in 0..uniform_count {
+                let mut name_len: i32 = 0;
+                let mut var_size: i32 = 0;
+                let mut var_type: u32 = 0;
+
+                gl::GetActiveUniform(
+                    handle,
+                    i as u32,
+                    256,
+                    &mut name_len,
+                    &mut var_size,
+                    &mut var_type,
+                    var_name.as_ptr() as *mut gl::types::GLchar,
+                );
+
+                let var_loc = gl::GetUniformLocation(handle, var_name.as_ptr());
+
+                {
+                    let mut string = var_name.to_string_lossy().into_owned();
+                    string.truncate(name_len as usize);
+
+                    uniforms.insert(string, var_loc as u32);
+                }
+            }
+        }
+
+        Some(ShaderProgram {
+            handle: Rc::new(NativeShaderProgram { handle, uniforms }),
+        })
+    }
+
+    pub fn set_float(&self, name: &str, value: f32) {
+        if let Some(uniform) = self.handle.uniforms.get(name) {
+            unsafe {
+                gl::Uniform1f(*uniform as i32, value);
+            }
+        }
     }
 
     pub fn bind(&self) {
         unsafe {
-            gl::UseProgram(self.handle);
+            gl::UseProgram(self.handle.handle);
         }
     }
 
     pub fn unbind(&self) {
         unsafe {
             gl::UseProgram(0);
-        }
-    }
-}
-
-impl Drop for ShaderProgram {
-    fn drop(&mut self) {
-        info!("Dropping shader program");
-        if self.handle != 0 {
-            unsafe {
-                gl::DeleteProgram(self.handle);
-            }
         }
     }
 }

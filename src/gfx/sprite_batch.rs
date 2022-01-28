@@ -1,12 +1,14 @@
 use super::buffer::Buffer;
+use super::color::colors;
 use super::color::Color;
+use super::shader::Shader;
+use super::shader::ShaderProgram;
 use super::texture::Texture;
-extern crate log;
+use super::texture_region::TextureRegion;
 
-#[derive(Copy, Clone)]
-pub struct Sprite<'a> {
-    pub texture: Option<&'a Texture>,
-
+#[derive(Clone)]
+pub struct Sprite {
+    pub texture: Texture,
     pub x: f32,
     pub y: f32,
     pub width: f32,
@@ -14,8 +16,8 @@ pub struct Sprite<'a> {
     pub color: Color,
 }
 
-impl Sprite<'_> {
-    pub fn new(texture: Option<&Texture>) -> Sprite {
+impl Sprite {
+    pub fn new(texture: Texture) -> Sprite {
         Sprite {
             texture,
             x: 0.0,
@@ -43,41 +45,75 @@ pub struct SpriteBatch<const COUNT: usize> {
     index_buffer: Buffer,
     vao_handle: u32,
     vertex_offset: u32,
+    last_texture: Option<Texture>,
+    drawing: bool,
+    shader_program: ShaderProgram,
 }
 
 impl<const COUNT: usize> SpriteBatch<COUNT> {
     pub fn new() -> Option<SpriteBatch<COUNT>> {
-        Some(SpriteBatch {
-            vertex_buffer: Buffer::new_with_capacity(
-                gl::ARRAY_BUFFER,
-                gl::DYNAMIC_DRAW,
-                (COUNT * std::mem::size_of::<f32>()) as u32,
-            )
-            .unwrap(),
-            index_buffer: Buffer::new_with_capacity(
-                gl::ELEMENT_ARRAY_BUFFER,
-                gl::STATIC_DRAW,
-                (COUNT * std::mem::size_of::<u32>() * 6) as u32,
-            )
-            .unwrap(),
-            vertices: [SpriteVertex {
-                x: 0.0,
-                y: 0.0,
-                u: 0.0,
-                v: 0.0,
-                color: 0.0,
-            }; COUNT],
-            vao_handle: 0,
-            vertex_offset: 0,
-        })
-    }
+        let vertex_shader = Shader::from_string(
+            gl::VERTEX_SHADER,
+            "
+            #version 430 core
+            
+            layout (location = 0) in vec2 in_position;
+            layout (location = 1) in vec2 in_uv;
+            layout (location = 2) in vec4 in_color;
 
-    pub fn initialize(&mut self) {
+            layout (location = 0) out vec4 out_color;
+            layout (location = 1) out vec2 out_uv;
+
+            void main() {
+                gl_Position = vec4(in_position, 0.0, 1.0);
+
+                out_color = in_color;
+                out_uv = in_uv;
+            }
+        ",
+        )
+        .unwrap();
+
+        let fragment_shader = Shader::from_string(
+            gl::FRAGMENT_SHADER,
+            "
+            #version 430 core
+
+            layout (location = 0) in vec4 in_color;
+            layout (location = 1) in vec2 in_uv;
+
+            layout (location = 0) out vec4 out_color;
+
+            uniform sampler2D u_texture;
+
+            void main() {
+                vec4 color = texture(u_texture, in_uv) * in_color;
+                out_color = color;
+            }
+        ",
+        )
+        .unwrap();
+
+        let vertex_buffer = Buffer::new_with_capacity(
+            gl::ARRAY_BUFFER,
+            gl::DYNAMIC_DRAW,
+            (COUNT * std::mem::size_of::<SpriteVertex>()) as u32,
+        )
+        .unwrap();
+        let mut index_buffer = Buffer::new_with_capacity(
+            gl::ELEMENT_ARRAY_BUFFER,
+            gl::STATIC_DRAW,
+            (COUNT * std::mem::size_of::<u32>() * 6) as u32,
+        )
+        .unwrap();
+
+        let mut vao_handle = 0;
+
         unsafe {
-            gl::GenVertexArrays(1, &mut self.vao_handle);
-            gl::BindVertexArray(self.vao_handle);
+            gl::GenVertexArrays(1, &mut vao_handle);
+            gl::BindVertexArray(vao_handle);
 
-            self.vertex_buffer.bind();
+            vertex_buffer.bind();
 
             let pos_offset = 0;
             let uv_offset = 2 * std::mem::size_of::<f32>();
@@ -113,7 +149,7 @@ impl<const COUNT: usize> SpriteBatch<COUNT> {
                 color_offset as *const std::os::raw::c_void,
             );
             gl::BindVertexArray(0);
-            self.vertex_buffer.unbind();
+            vertex_buffer.unbind();
         }
 
         let mut indices: Vec<u32> = vec![0; COUNT * 6];
@@ -137,17 +173,48 @@ impl<const COUNT: usize> SpriteBatch<COUNT> {
             }
         }
 
-        self.index_buffer.set_data_u32(indices.as_slice());
+        index_buffer.set_data_u32(indices.as_slice());
+
+        Some(SpriteBatch {
+            vertex_buffer,
+            index_buffer,
+            vao_handle,
+            vertices: [SpriteVertex {
+                x: 0.0,
+                y: 0.0,
+                u: 0.0,
+                v: 0.0,
+                color: 0.0,
+            }; COUNT],
+            vertex_offset: 0,
+            last_texture: None,
+            drawing: false,
+            shader_program: ShaderProgram::from_shaders(&[fragment_shader, vertex_shader]).unwrap(),
+        })
     }
 
     pub fn begin_batch(&mut self) {
-        self.vertex_offset = 0;
+        if !self.drawing {
+            self.drawing = true;
+        } else {
+            panic!("Can't call begin_batch() on a batch that is already drawing!");
+        }
     }
 
-    pub fn draw(&mut self, x: f32, y: f32, width: f32, height: f32, color: Option<Color>) {
+    pub fn draw(
+        &mut self,
+        texture: &Texture,
+        x: f32,
+        y: f32,
+        width: f32,
+        height: f32,
+        color: Option<Color>,
+    ) {
+        self.check_state(texture);
+
         let color = match color {
             Some(c) => c,
-            None => Color::from_rgba(1.0, 1.0, 1.0, 1.0),
+            None => colors::WHITE,
         };
 
         let c = color.to_rgba8();
@@ -198,32 +265,88 @@ impl<const COUNT: usize> SpriteBatch<COUNT> {
         }
     }
 
+    pub fn draw_region(
+        &mut self,
+        region: &TextureRegion,
+        x: f32,
+        y: f32,
+        width: f32,
+        height: f32,
+        color: Option<Color>,
+    ) {
+        self.draw(region.get_texture(), x, y, width, height, color);
+    }
+
+    pub fn draw_sprite(&mut self, sprite: &Sprite) {
+        self.draw(
+            &sprite.texture,
+            sprite.x,
+            sprite.y,
+            sprite.width,
+            sprite.height,
+            Some(sprite.color),
+        );
+    }
+
     pub fn end_batch(&mut self) {
-        unsafe {
-            let ptr = std::slice::from_raw_parts(
-                (&self.vertices[0] as *const SpriteVertex) as *const f32,
-                (self.vertex_offset * 5) as usize,
-            );
-
-            //info!("{:?}", ptr);
-
-            self.vertex_buffer.bind();
-            self.vertex_buffer.copy_data_part(
-                ptr,
-                (self.vertex_offset * (std::mem::size_of::<f32>() * 5) as u32) as isize,
-                0,
-            );
-
-            let offset = 0;
-
-            gl::BindVertexArray(self.vao_handle);
-            self.index_buffer.bind();
-            gl::DrawElements(
-                gl::TRIANGLES,
-                ((self.vertex_offset / 4) * 6) as i32,
-                gl::UNSIGNED_INT,
-                offset as *const std::os::raw::c_void,
-            );
+        if !self.drawing {
+            panic!("Can't call end_batch() on a batch that is not in the drawing state!");
         }
+
+        self.flush_batch();
+
+        self.drawing = false;
+    }
+
+    pub fn flush_batch(&mut self) {
+        if self.vertex_offset > 0 {
+            unsafe {
+                let ptr = std::slice::from_raw_parts(
+                    (&self.vertices[0] as *const SpriteVertex) as *const f32,
+                    (self.vertex_offset as usize * std::mem::size_of::<SpriteVertex>()) as usize,
+                );
+
+                self.vertex_buffer.bind();
+                self.vertex_buffer.copy_data_part(
+                    ptr,
+                    (self.vertex_offset * (std::mem::size_of::<SpriteVertex>()) as u32) as isize,
+                    0,
+                );
+
+                let offset = 0;
+
+                gl::BindVertexArray(self.vao_handle);
+                self.index_buffer.bind();
+
+                self.shader_program.bind();
+                self.shader_program.set_float("u_t", 100.0);
+
+                self.last_texture.as_ref().unwrap().bind(0);
+
+                gl::DrawElements(
+                    gl::TRIANGLES,
+                    ((self.vertex_offset / 4) * 6) as i32,
+                    gl::UNSIGNED_INT,
+                    offset as *const std::os::raw::c_void,
+                );
+            }
+        }
+
+        self.vertex_offset = 0;
+        self.last_texture = None;
+    }
+
+    fn check_state(&mut self, texture: &Texture) {
+        if !self.drawing {
+            panic!("Can't issue draw commands to a batch that is not in the drawing state!");
+        }
+
+        if let Some(tex) = &self.last_texture {
+            if texture != tex {
+                self.flush_batch();
+            }
+        }
+
+        self.last_texture = Some(texture.clone());
     }
 }
