@@ -17,22 +17,8 @@ impl rlib::RLibApp for Application {
         let wall_texture = gfx::texture::Texture::from_file("data/stonewall.png").unwrap();
 
         let sprites = vec![
-            gfx::sprite_batch::Sprite {
-                texture: texture.clone(),
-                x: 0.0,
-                y: 0.0,
-                width: 0.5,
-                height: 0.5,
-                color: gfx::color::Color::from_rgba(1.0, 1.0, 1.0, 1.0),
-            },
-            gfx::sprite_batch::Sprite {
-                texture: wall_texture.clone(),
-                x: -0.5,
-                y: -0.5,
-                width: 0.5,
-                height: 0.5,
-                color: gfx::color::Color::from_rgba(1.0, 1.0, 1.0, 1.0),
-            },
+            gfx::sprite_batch::Sprite::new(texture.clone()),
+            // gfx::sprite_batch::Sprite::new(wall_texture.clone()),
         ];
 
         Self {
@@ -51,13 +37,21 @@ impl rlib::RLibApp for Application {
             gl::Enable(gl::BLEND);
             gl::BlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA);
         }
+
+        {
+            let sprite = &mut self.sprites[0];
+            sprite.size.x = 0.5;
+            sprite.size.y = 0.5;
+            sprite.origin.x = 0.25;
+            sprite.origin.y = 0.25;
+
+            // sprite.rotation = 90.0;
+        }
     }
 
     fn on_key(&mut self, scancode: u32) {
-        println!("{}", scancode);
-
         if scancode == 26 {
-            self.lmao2 += 0.006;
+            self.sprites[0].rotation += 15.0;
         }
 
         if scancode == 22 {

@@ -5,26 +5,29 @@ use super::shader::Shader;
 use super::shader::ShaderProgram;
 use super::texture::Texture;
 use super::texture_region::TextureRegion;
+use glam::{Vec2, Vec4};
 
 #[derive(Clone)]
 pub struct Sprite {
-    pub texture: Texture,
-    pub x: f32,
-    pub y: f32,
-    pub width: f32,
-    pub height: f32,
+    pub region: TextureRegion,
+    pub position: Vec2,
+    pub size: Vec2,
+    pub origin: Vec2,
+    pub rotation: f32,
     pub color: Color,
 }
 
 impl Sprite {
     pub fn new(texture: Texture) -> Sprite {
+        let width = texture.get_width();
+        let height = texture.get_height();
         Sprite {
-            texture,
-            x: 0.0,
-            y: 0.0,
-            width: 10.0,
-            height: 10.0,
+            region: TextureRegion::new(texture),
+            position: Vec2::new(0.0, 0.0),
+            size: Vec2::new(width as f32, height as f32),
             color: Color::from_rgba(1.0, 1.0, 1.0, 1.0),
+            origin: Vec2::new(width as f32 / 2.0, height as f32 / 2.0),
+            rotation: 0.0,
         }
     }
 }
@@ -278,14 +281,90 @@ impl<const COUNT: usize> SpriteBatch<COUNT> {
     }
 
     pub fn draw_sprite(&mut self, sprite: &Sprite) {
-        self.draw(
-            &sprite.texture,
-            sprite.x,
-            sprite.y,
-            sprite.width,
-            sprite.height,
-            Some(sprite.color),
+        self.check_state(sprite.region.get_texture());
+
+        let c = sprite.color.to_rgba8();
+
+        let origin = Vec2::new(
+            sprite.origin.x + sprite.position.x,
+            sprite.origin.y + sprite.position.y,
         );
+
+        let offsets = Vec4::new(
+            -origin.x,
+            -origin.y,
+            sprite.size.x - origin.x,
+            sprite.size.y - origin.y,
+        );
+
+        let rot = (-sprite.rotation).to_radians();
+        let r_sin = rot.sin();
+        let r_cos = rot.cos();
+
+        let p1 = Vec2::new(
+            (offsets.x * r_cos - offsets.y * r_sin) + origin.x,
+            (offsets.x * r_sin + offsets.y * r_cos) + origin.y,
+        );
+
+        let p2 = Vec2::new(
+            (offsets.z * r_cos - offsets.y * r_sin) + origin.x,
+            (offsets.z * r_sin + offsets.y * r_cos) + origin.y,
+        );
+
+        let p3 = Vec2::new(
+            (offsets.z * r_cos - offsets.w * r_sin) + origin.x,
+            (offsets.z * r_sin + offsets.w * r_cos) + origin.y,
+        );
+
+        let p4 = Vec2::new(
+            (offsets.x * r_cos - offsets.w * r_sin) + origin.x,
+            (offsets.x * r_sin + offsets.w * r_cos) + origin.y,
+        );
+
+        {
+            let vtx: &mut SpriteVertex = &mut self.vertices[self.vertex_offset as usize];
+
+            vtx.x = p1.x;
+            vtx.y = p1.y;
+            vtx.u = sprite.region.get_u();
+            vtx.v = sprite.region.get_v();
+            vtx.color = c;
+
+            self.vertex_offset += 1;
+        }
+        {
+            let vtx: &mut SpriteVertex = &mut self.vertices[self.vertex_offset as usize];
+
+            vtx.x = p2.x;
+            vtx.y = p2.y;
+            vtx.u = sprite.region.get_u2();
+            vtx.v = sprite.region.get_v();
+            vtx.color = c;
+
+            self.vertex_offset += 1;
+        }
+        {
+            let vtx: &mut SpriteVertex = &mut self.vertices[self.vertex_offset as usize];
+
+            vtx.x = p3.x;
+            vtx.y = p3.y;
+            vtx.u = sprite.region.get_u2();
+            vtx.v = sprite.region.get_v2();
+            vtx.color = c;
+
+            self.vertex_offset += 1;
+        }
+        {
+            let vtx: &mut SpriteVertex = &mut self.vertices[self.vertex_offset as usize];
+
+            vtx.x = p4.x;
+            vtx.y = p4.y;
+            vtx.u = sprite.region.get_u();
+            vtx.v = sprite.region.get_v2();
+            vtx.color = c;
+
+            self.vertex_offset += 1;
+        }
     }
 
     pub fn end_batch(&mut self) {
